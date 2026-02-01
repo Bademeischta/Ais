@@ -1,0 +1,12 @@
+{"location": "app.py:entry", "message": "app_started", "timestamp": 1769966099844, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1", "data": {}}
+{"location": "app.py:imports", "message": "imports_ok", "timestamp": 1769966102238, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2", "data": {}}
+{"location": "app.py:world", "message": "world_created", "timestamp": 1769966102246, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {}}
+{"location": "app.py:main", "message": "networks_created", "timestamp": 1769966102256, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3", "data": {}}
+{"location": "app.py:main", "message": "bots_initialized", "timestamp": 1769966104039, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {"n_bots": 14}}
+{"location": "app.py:main", "message": "server_starting", "timestamp": 1769966104040, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5", "data": {"host": "127.0.0.1", "port": 5000}}
+{"location": "app.py:entry", "message": "app_started", "timestamp": 1769966446391, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1", "data": {}}
+{"location": "app.py:imports", "message": "imports_ok", "timestamp": 1769966448462, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2", "data": {}}
+{"location": "app.py:world", "message": "world_created", "timestamp": 1769966448469, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {}}
+{"location": "app.py:main", "message": "networks_created", "timestamp": 1769966448473, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3", "data": {}}
+{"location": "app.py:main", "message": "bots_initialized", "timestamp": 1769966449481, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {"n_bots": 14}}
+{"location": "app.py:main", "message": "server_starting", "timestamp": 1769966449482, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5", "data": {"host": "127.0.0.1", "port": 5000}}
