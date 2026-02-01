@@ -603,7 +603,7 @@ def game_loop():
         time.sleep(max(0, 1/30 - (time.time() - st)))
 
 if __name__ == '__main__':
-    device = torch.device("cpu"); encoder = SharedEncoder().to(device); crn = CRN().to(device); mspns = torch.nn.ModuleList([MSPN().to(device) for _ in range(10)]); mcn = MCN().to(device)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); encoder = SharedEncoder().to(device); crn = CRN().to(device); mspns = torch.nn.ModuleList([MSPN().to(device) for _ in range(10)]); mcn = MCN().to(device)
     bt = [RandomBot, RuleBasedBot, PotentialFieldBot, PIDControllerBot, GeneticBot, TabularQLearningBot, DeepQBot, ActorCriticBot, HeuristicSearchBot, EnsembleBot, NovelBot]
     for i, c in enumerate(bt):
         for j in range(2): world.bots.append(c(len(world.bots), device=device) if c in [DeepQBot, ActorCriticBot, NovelBot] else c(len(world.bots)))

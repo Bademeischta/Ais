@@ -20,7 +20,7 @@ class MetaLearningEvaluator:
         self.mspns = mspns
         self.mcn = mcn
         self.modes = modes
-        self.device = device or torch.device("cpu")
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.metrics = defaultdict(list)
 
     def evaluate_crn_accuracy(self, num_episodes_per_mode=50, feature_encoder=None):

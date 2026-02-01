@@ -8,8 +8,13 @@ from collections import deque
 from entities import BaseBot, MAP_SIZE
 from networks import DQNet, ACNet, SynergyNet, DuelingDQNet
 
+def _default_device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 class NovelBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
+        device = device or _default_device()
         super().__init__(bot_id); self.algo_name = "Novel"; self.color = "#FFD700"
         self.device = device
         self.syn = SynergyNet().to(device); self.opt = torch.optim.Adam(self.syn.parameters(), lr=0.001)
@@ -137,9 +142,9 @@ class TabularQLearningBot(BaseBot):
     def load_state(self, s): self.q = {eval(k): np.array(v) for k,v in s['q'].items()}; self.eps = s['eps']
 
 class DeepQBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id); self.algo_name = "DQN"; self.color = "#FF0000"
-        self.device = device
+        self.device = device or _default_device()
         self.model = DQNet().to(device); self.target = DQNet().to(device)
         self.target.load_state_dict(self.model.state_dict())
         self.opt = torch.optim.Adam(self.model.parameters(), lr=0.0005); self.mem = deque(maxlen=50000)
@@ -171,9 +176,9 @@ class DeepQBot(BaseBot):
     def load_state(self, s): self.model.load_state_dict(s['model']); self.eps = s['eps']
 
 class ActorCriticBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id); self.algo_name = "A2C"; self.color = "#8B00FF"
-        self.device = device
+        self.device = device or _default_device()
         self.model = ACNet().to(device); self.opt = torch.optim.Adam(self.model.parameters(), lr=0.001)
         self.llp, self.lv = None, None
     def decide(self, i):
@@ -252,11 +257,11 @@ class LSTMPolicyNet(nn.Module):
 
 
 class PPOBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id)
         self.algo_name = "PPO"
         self.color = "#FF1493"
-        self.device = device
+        self.device = device or _default_device()
         self.policy = ACNet().to(device)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
         self.buffer = []
@@ -333,11 +338,11 @@ class PPOBot(BaseBot):
 
 
 class DuelingDQNBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id)
         self.algo_name = "D-DQN"
         self.color = "#9400D3"
-        self.device = device
+        self.device = device or _default_device()
         self.model = DuelingDQNet().to(device)
         self.target = DuelingDQNet().to(device)
         self.target.load_state_dict(self.model.state_dict())
@@ -395,11 +400,11 @@ class DuelingDQNBot(BaseBot):
 
 
 class SACBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id)
         self.algo_name = "SAC"
         self.color = "#20B2AA"
-        self.device = device
+        self.device = device or _default_device()
         self.actor = ACNet().to(device)
         self.critic1 = nn.Sequential(
             nn.Linear(228, 256), nn.ReLU(),
@@ -473,11 +478,11 @@ class SACBot(BaseBot):
 
 
 class CuriosityBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id)
         self.algo_name = "Curiosity"
         self.color = "#FFB6C1"
-        self.device = device
+        self.device = device or _default_device()
         self.policy = ACNet().to(device)
         self.curiosity = CuriosityNet().to(device)
         self.policy_opt = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
@@ -535,11 +540,11 @@ class CuriosityBot(BaseBot):
 
 
 class LSTMBot(BaseBot):
-    def __init__(self, bot_id, device=torch.device("cpu")):
+    def __init__(self, bot_id, device=None):
         super().__init__(bot_id)
         self.algo_name = "LSTM"
         self.color = "#4169E1"
-        self.device = device
+        self.device = device or _default_device()
         self.policy = LSTMPolicyNet().to(device)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
         self.hidden = None

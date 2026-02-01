@@ -262,7 +262,11 @@ def game_loop():
         time.sleep(max(0, 1/30 - (time.time() - st)))
 
 if __name__ == '__main__':
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cuda":
+        print(f"  GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        print("  GPU: nicht verfuegbar, nutze CPU")
     encoder = SharedEncoder().to(device)
     crn = CRN().to(device)
     mspns = torch.nn.ModuleList([MSPN().to(device) for _ in range(10)])
