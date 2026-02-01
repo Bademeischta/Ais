@@ -76,13 +76,9 @@
         function render(gameState) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw background grid
             drawGrid();
-            
-            // Draw map boundaries
             drawBoundaries();
             
-            // Draw food
             if (gameState.food) {
                 gameState.food.forEach(food => {
                     ctx.beginPath();
@@ -91,15 +87,39 @@
                     ctx.fill();
                 });
             }
+
+            if (gameState.objects) {
+                gameState.objects.forEach(obj => drawObject(obj));
+            }
             
-            // Draw bots (sorted by mass)
             if (gameState.bots) {
                 const sortedBots = [...gameState.bots].sort((a, b) => a.mass - b.mass);
                 sortedBots.forEach(bot => drawBot(bot));
             }
             
-            // Draw HUD
             drawHUD(gameState);
+        }
+
+        function drawObject(obj) {
+            const x = obj.x * scale;
+            const y = obj.y * scale;
+            const r = obj.radius * scale;
+
+            ctx.beginPath();
+            if (obj.type === 'flag') {
+                ctx.rect(x - r, y - r, r * 2, r * 2);
+            } else if (obj.type === 'checkpoint') {
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = obj.color;
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,0,0.1)';
+            } else {
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+            }
+            ctx.fillStyle = obj.color;
+            if (obj.activated) ctx.fillStyle = '#fff';
+            ctx.fill();
         }
 
         function drawGrid() {
@@ -132,13 +152,32 @@
             const y = bot.y * scale;
             const r = bot.radius * scale;
             
+            // Draw attention rays
+            if (bot.rays && bot.algo_name === "Meta-Learner") {
+                bot.rays.forEach((ray, i) => {
+                    const angle = i * (Math.PI * 2 / 24);
+                    const dist = ray[0] * 500 * scale;
+                    const opacity = (1.0 - ray[0]) * 0.4;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist);
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+                    if (ray[2] === 1.0) ctx.strokeStyle = `rgba(0, 255, 0, ${opacity})`; // Food
+                    if (ray[3] === 1.0) ctx.strokeStyle = `rgba(255, 0, 0, ${opacity})`; // Enemy
+                    if (ray[5] === 1.0) ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`; // Special
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+            }
+
             // Body
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fillStyle = bot.color;
             ctx.fill();
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = bot.team_id === 1 ? '#f00' : (bot.team_id === 2 ? '#00f' : '#000');
+            ctx.lineWidth = 2;
             ctx.stroke();
             
             // Name tag
@@ -159,12 +198,14 @@
         }
 
         function drawHUD(gameState) {
-            ctx.font = '14px monospace';
+            ctx.font = '20px monospace';
             ctx.fillStyle = '#fff';
             ctx.textAlign = 'left';
-            ctx.fillText(`Frame: ${gameState.frame}`, 10, 50);
-            ctx.fillText(`FPS: ${gameState.fps || 0}`, 10, 70);
-            ctx.fillText(`Alive: ${gameState.bots ? gameState.bots.length : 0}`, 10, 90);
+            ctx.fillText(`MODE: ${gameState.mode}`, 10, 30);
+
+            ctx.font = '14px monospace';
+            ctx.fillText(`Frame: ${gameState.frame}`, 10, 60);
+            ctx.fillText(`Alive: ${gameState.bots ? gameState.bots.length : 0}`, 10, 80);
             
             if (gameState.bots) {
                 const leaderboard = [...gameState.bots]
