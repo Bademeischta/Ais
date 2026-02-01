@@ -112,13 +112,14 @@
             'Racing': 'Checkpoints in Reihenfolge 1→2→3… abfahren.',
             'Puzzle Cooperation': 'Beide Schalter gleichzeitig aktivieren.'
         };
+        const LEARN_HINT = 'Bots behalten ihr gelerntes Wissen und lernen den neuen Modus dazu.';
         let tutorialTimeout = null;
         function showTutorial(modeName) {
             const el = document.getElementById('tutorialOverlay');
-            el.textContent = TUTORIALS[modeName] || '';
+            el.innerHTML = (TUTORIALS[modeName] || '') + '<br><small style="opacity:0.9">' + LEARN_HINT + '</small>';
             el.classList.add('visible');
             if (tutorialTimeout) clearTimeout(tutorialTimeout);
-            tutorialTimeout = setTimeout(() => { el.classList.remove('visible'); }, 3000);
+            tutorialTimeout = setTimeout(() => { el.classList.remove('visible'); }, 4000);
         }
 
         function render(gameState) {
@@ -265,7 +266,14 @@
             ctx.font = '14px monospace';
             ctx.fillText(`Frame: ${gameState.frame}`, 10, 70);
             ctx.fillText(`Alive: ${gameState.bots ? gameState.bots.length : 0}`, 10, 90);
-            
+            if (gameState.auto_rotation && gameState.next_mode_switch_in_frames != null) {
+                const nextIdx = (gameState.mode_id + 1) % 10;
+                const nextNames = ['Classic','Tag','TDM','CTF','KotH','BR','Inf','Res','Race','Puz'];
+                const sec = Math.ceil(gameState.next_mode_switch_in_frames / 30);
+                ctx.fillStyle = '#0fa';
+                ctx.fillText(`Auto-Rotation: an | Nächster: ${nextNames[nextIdx]} in ${sec}s`, 10, 110);
+                ctx.fillStyle = '#fff';
+            }
             if (gameState.bots) {
                 const leaderboard = [...gameState.bots]
                     .sort((a, b) => b.mass - a.mass)
