@@ -43,6 +43,10 @@ MAX_BOT_MASS = 500
 MIN_BOT_MASS = 15
 SAVE_DIR = './saves/'
 
+# Automatischer Moduswechsel für AFK-Training: KIs durchlaufen alle Modi
+AUTO_MODE_ROTATION = True
+MODE_SWITCH_INTERVAL_FRAMES = 3000   # alle 3000 Frames (~100 Sek bei 30 FPS) nächster Modus
+
 # Shared Lock
 game_state_lock = threading.Lock()
 
@@ -67,11 +71,37 @@ class GameWorld:
         self.current_mode = None
 
     def set_mode(self, mode_class):
+        """Modus wechseln: Welt leeren, alle Bots respawnen (leben wieder), dann Modus initialisieren.
+        So funktioniert z.B. der Wechsel von Battle Royale (allow_respawn=False) in einen anderen Modus.
+        Bots behalten ihre gelernten Gewichte und sammeln im neuen Modus weiter Erfahrung."""
         self.current_mode = mode_class(self)
         self.objects = []
         self.food = []
         self.frame = 0
+        self._reset_all_bots_for_new_mode()
         self.current_mode.initialize()
+
+    def _reset_all_bots_for_new_mode(self):
+        """Setzt alle Bots auf lebend, neue Position, Startmasse. Keine Netzwerk-Gewichte zurücksetzen –
+        die KIs lernen mit der Zeit jeden Modus; beim Moduswechsel starten sie nur die Runde neu."""
+        for b in self.bots:
+            b.died = False
+            b.x = random.uniform(100, self.width - 100)
+            b.y = random.uniform(100, self.height - 100)
+            b.mass = STARTING_MASS
+            b.velocity = [0.0, 0.0]
+            b.carrying_flag = False
+            b.status = {}
+            b.food_eaten = 0
+            b.kills = 0
+            b.deaths = 0
+            b.time_alive_current = 0
+            b.max_mass_achieved = STARTING_MASS
+            b.last_reward = 0
+            # MetaBot: Beobachtungspuffer leeren, damit Modus-Erkennung im neuen Modus neu startet
+            if hasattr(b, 'obs_buffer') and hasattr(b.obs_buffer, 'clear'):
+                b.obs_buffer.clear()
+            # total_reward bleibt – für lernende Bots zählt Erfahrung über Modi hinweg
 
     def spawn_food(self):
         f = FoodPellet(random.randint(0, 1000000), random.uniform(20, self.width-20), random.uniform(20, self.height-20))
@@ -161,6 +191,14 @@ def game_loop():
                 a = safe_decide(b, b.get_input_vector(world))
                 b.apply_action(a)
             world.update()
+
+            # Automatischer Moduswechsel: alle MODE_SWITCH_INTERVAL_FRAMES zum nächsten Modus
+            if AUTO_MODE_ROTATION and world.frame > 0 and world.frame % MODE_SWITCH_INTERVAL_FRAMES == 0:
+                current_id = getattr(world.current_mode, 'mode_id', 0)
+                next_idx = (current_id + 1) % len(MODES)
+                world.set_mode(MODES[next_idx])
+                socketio.emit('mode_changed', {'mode': world.current_mode.name, 'mode_index': next_idx})
+
             for b in world.bots:
                 if b.died: continue
                 if hasattr(b, 'learn'):
@@ -186,11 +224,18 @@ def game_loop():
                     bot_data.append(d)
 
                 render_specs = world.current_mode.get_render_specs() if world.current_mode else {}
+                mode_id = getattr(world.current_mode, 'mode_id', 0) if world.current_mode else 0
+                next_switch_in = 0
+                if AUTO_MODE_ROTATION and world.current_mode:
+                    next_switch_in = MODE_SWITCH_INTERVAL_FRAMES - (world.frame % MODE_SWITCH_INTERVAL_FRAMES)
                 socketio.emit('game_state', {
                     'frame': world.frame,
                     'mode': world.current_mode.name if world.current_mode else "None",
-                    'mode_id': getattr(world.current_mode, 'mode_id', 0) if world.current_mode else 0,
+                    'mode_id': mode_id,
                     'render_specs': render_specs,
+                    'auto_rotation': AUTO_MODE_ROTATION,
+                    'mode_switch_interval_frames': MODE_SWITCH_INTERVAL_FRAMES,
+                    'next_mode_switch_in_frames': next_switch_in,
                     'bots': bot_data,
                     'food': [{'x': f.x, 'y': f.y} for f in world.food],
                     'objects': [{'type': o.type, 'x': o.x, 'y': o.y, 'radius': o.radius, 'color': o.color, 'activated': getattr(o, 'activated', False)} for o in world.objects]

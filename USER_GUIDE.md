@@ -4,7 +4,8 @@
 
 1. **Starten**: `run.bat` oder `python app.py` → Browser **http://localhost:5000**.
 2. **Verbindung**: Oben links „CONNECTED“ (grün) = Server verbunden.
-3. **Modus wechseln**: Oben rechts im **Dropdown** einen der 10 Modi wählen. Der Modus wechselt sofort; ein kurzes **Tutorial-Overlay** erklärt die Regeln für 3 Sekunden.
+3. **Automatischer Moduswechsel (AFK-Training)**: Ist standardmäßig **an**. Die Arena wechselt alle **~100 Sekunden** (3000 Frames) automatisch zum nächsten Modus (Classic → Tag → TDM → CTF → … → Puzzle → Classic). So kannst du die Arena laufen lassen und die KIs trainieren in allen Modi. Links im HUD steht z. B. „Auto-Rotation: an | Nächster: Tag in 45s“. Ausschalten/Intervall ändern: in `app.py` `AUTO_MODE_ROTATION = False` oder `MODE_SWITCH_INTERVAL_FRAMES = 6000` (z. B. 200 s).
+4. **Modus manuell wechseln**: Oben rechts im **Dropdown** einen der 10 Modi wählen. Der Modus wechselt sofort; ein kurzes **Tutorial-Overlay** erklärt die Regeln.
 4. **Anzeigen**:
    - **MODE**: aktueller Spielmodus.
    - **Grüner Balken** (links): Modus-Confidence des Meta-Learners (0–100 %). Ab ~80 % nutzt die KI die erkannte Experten-Policy.
@@ -22,7 +23,8 @@
 ## Modus-Wechsel
 
 - Während des Laufs im **Dropdown** einen anderen Modus wählen.
-- Der Server setzt die Welt zurück (neue Objekte, gleiche Bots), die Simulation läuft weiter.
+- **Alle Bots respawnen automatisch** im neuen Modus (leben wieder, neue Position, Startmasse) – auch nach Battle Royale, wo im Modus selbst kein Respawn ist.
+- Die **gelernten Gewichte** (DQN, A2C, Genetic, TabularQ, Novel, Meta-Learner) **bleiben erhalten**. Die KIs sammeln im neuen Modus weiter Erfahrung und lernen so mit der Zeit jeden Modus – du lässt es laufen, wechselst ab und zu den Modus, und irgendwann können sie jeden Modus spielen.
 - Kein Neustart nötig.
 
 ## Eigene Modi hinzufügen

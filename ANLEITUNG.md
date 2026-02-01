@@ -20,13 +20,10 @@ Du startest den Server lokal, öffnest im Browser **http://localhost:5000** und 
 - **Meta-Learner** (3 Bots) zeigen „Attention Rays“: Strahlen zeigen, wohin die KI „schaut“ (Grün = Futter, Rot = Feind)
 - Kein manuelles Spielen – du schaust nur zu, die Bots steuern sich selbst
 
-### 2.2 Spielmodus ändern (nur im Code)
-Aktuell ist **nur ein Modus** beim Start gesetzt: **Classic Arena** (Agar.io-Style: Masse sammeln, andere fressen).
-
-**Wo:** `app.py`, ganz unten im Block `if __name__ == '__main__':`:
-```python
-world.set_mode(ClassicArena)   # <-- hier Modus wählen
-```
+### 2.2 Spielmodus: automatisch (AFK) oder manuell
+- **Automatisch (Standard):** In `app.py`: `AUTO_MODE_ROTATION = True`, `MODE_SWITCH_INTERVAL_FRAMES = 3000` (~100 s). Die Arena wechselt von selbst durch alle 10 Modi – ideal zum AFK-Trainieren. Im HUD: „Auto-Rotation: an | Nächster: Tag in Xs“.
+- **Manuell:** Oben rechts im **Dropdown** einen Modus wählen – sofortiger Wechsel. Alle Bots respawnen; KIs behalten ihr gelerntes Wissen.
+- **Beim Start (Code):** `app.py`, unten: `world.set_mode(ClassicArena)` auf die gewünschte Modus-Klasse setzen.
 
 **Verfügbare Modi** (alle in `gamemodes.py` definiert):
 
