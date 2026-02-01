@@ -1,15 +1,27 @@
-# gamemodes.py
+# gamemodes.py – Modulare Spielmodi mit Standard-Interface für Meta-Learning
 import math
 import random
 import torch
 from entities import FoodPellet, Flag, Checkpoint, Resource, PuzzleElement, MAP_SIZE
 
+# Modus-ID 0..9 für CRN/MSPN (Reihenfolge fest)
+MODE_IDS = {
+    "Classic Arena": 0, "Tag": 1, "Team Deathmatch": 2, "Capture the Flag": 3,
+    "King of the Hill": 4, "Battle Royale": 5, "Infection": 6, "Resource Collector": 7,
+    "Racing": 8, "Puzzle Cooperation": 9
+}
+
+
 class GameMode:
+    """Basisklasse: Initialization, Update, Reward, Victory, Render-Specs."""
     def __init__(self, world):
         self.world = world
         self.name = "Abstract Mode"
+        self.mode_id = 0
         self.episode_length = 3000
         self.allow_respawn = True
+        self.victory_condition = "time_limit"
+        self.reward_structure = "generic"
 
     def initialize(self):
         pass
@@ -25,15 +37,25 @@ class GameMode:
             return {"reason": "time_limit"}
         return None
 
+    def get_render_specs(self):
+        """Für Frontend: Zone, Zentrum, spezielle Darstellung."""
+        return {"show_zone": False, "zone_radius": 0, "center_x": MAP_SIZE // 2, "center_y": MAP_SIZE // 2}
+
 class ClassicArena(GameMode):
     def initialize(self):
         self.name = "Classic Arena"
+        self.mode_id = MODE_IDS["Classic Arena"]
+        self.victory_condition = "highest_mass_or_time"
+        self.reward_structure = "mass_gain_kills_food"
         self.world.objects = []
         for _ in range(150): self.world.spawn_food()
 
 class TagMode(GameMode):
     def initialize(self):
         self.name = "Tag"
+        self.mode_id = MODE_IDS["Tag"]
+        self.victory_condition = "most_tags_or_survive"
+        self.reward_structure = "tagger_reward_runner_survival"
         self.world.objects = []
         self.world.food = []
         if not self.world.bots: return
@@ -71,6 +93,9 @@ class TagMode(GameMode):
 class TeamDeathmatchMode(GameMode):
     def initialize(self):
         self.name = "Team Deathmatch"
+        self.mode_id = MODE_IDS["Team Deathmatch"]
+        self.victory_condition = "most_eliminations"
+        self.reward_structure = "kills_teamwork_no_friendly_fire"
         self.world.objects = []
         self.world.food = []
         for i, b in enumerate(self.world.bots):
@@ -90,6 +115,9 @@ class TeamDeathmatchMode(GameMode):
 class CaptureTheFlagMode(GameMode):
     def initialize(self):
         self.name = "Capture the Flag"
+        self.mode_id = MODE_IDS["Capture the Flag"]
+        self.victory_condition = "3_captures"
+        self.reward_structure = "capture_return_defense"
         self.world.food = []
         self.world.objects = [
             Flag(1, 150, 150, 1),
@@ -129,11 +157,19 @@ class CaptureTheFlagMode(GameMode):
 
     def calculate_reward(self, bot):
         if bot.carrying_flag: return 0.5
+        # Shaped: Annäherung an gegnerische Flagge
+        enemy_flag = next((obj for obj in self.world.objects if isinstance(obj, Flag) and obj.team_id != bot.team_id), None)
+        if enemy_flag and not bot.carrying_flag:
+            d = math.sqrt((bot.x - enemy_flag.x)**2 + (bot.y - enemy_flag.y)**2)
+            return max(0, (2000 - d) / 20000.0)  # Dense reward
         return 0
 
 class KingOfTheHillMode(GameMode):
     def initialize(self):
         self.name = "King of the Hill"
+        self.mode_id = MODE_IDS["King of the Hill"]
+        self.victory_condition = "longest_time_in_hill"
+        self.reward_structure = "continuous_zone_bonus"
         self.world.objects = []
         self.world.food = []
         self.hill_x, self.hill_y, self.hill_r = MAP_SIZE//2, MAP_SIZE//2, 250
@@ -143,9 +179,15 @@ class KingOfTheHillMode(GameMode):
         if dist < self.hill_r: return 1.0
         return -0.1
 
+    def get_render_specs(self):
+        return {"show_zone": True, "zone_radius": self.hill_r, "center_x": self.hill_x, "center_y": self.hill_y}
+
 class BattleRoyaleMode(GameMode):
     def initialize(self):
         self.name = "Battle Royale"
+        self.mode_id = MODE_IDS["Battle Royale"]
+        self.victory_condition = "last_survivor"
+        self.reward_structure = "survival_zone_damage"
         self.allow_respawn = False
         self.zone_radius = MAP_SIZE * 0.8
         self.world.objects = []
@@ -167,9 +209,15 @@ class BattleRoyaleMode(GameMode):
         if not bot.died: return 0.2
         return 0
 
+    def get_render_specs(self):
+        return {"show_zone": True, "zone_radius": self.zone_radius, "center_x": MAP_SIZE // 2, "center_y": MAP_SIZE // 2}
+
 class InfectionMode(GameMode):
     def initialize(self):
         self.name = "Infection"
+        self.mode_id = MODE_IDS["Infection"]
+        self.victory_condition = "all_infected_or_last_survivor"
+        self.reward_structure = "zombie_conversion_survivor_time"
         self.world.objects = []
         self.world.food = []
         if not self.world.bots: return
@@ -204,6 +252,9 @@ class InfectionMode(GameMode):
 class ResourceCollectorMode(GameMode):
     def initialize(self):
         self.name = "Resource Collector"
+        self.mode_id = MODE_IDS["Resource Collector"]
+        self.victory_condition = "most_resource_points"
+        self.reward_structure = "gold_silver_bronze_value"
         self.world.objects = []
         self.world.food = []
         for _ in range(30):
@@ -227,6 +278,9 @@ class ResourceCollectorMode(GameMode):
 class RacingMode(GameMode):
     def initialize(self):
         self.name = "Racing"
+        self.mode_id = MODE_IDS["Racing"]
+        self.victory_condition = "all_checkpoints_in_order"
+        self.reward_structure = "checkpoint_sequence_time"
         self.world.objects = []
         self.world.food = []
         for i in range(8):
@@ -259,6 +313,9 @@ class RacingMode(GameMode):
 class PuzzleCooperationMode(GameMode):
     def initialize(self):
         self.name = "Puzzle Cooperation"
+        self.mode_id = MODE_IDS["Puzzle Cooperation"]
+        self.victory_condition = "all_plates_activated_together"
+        self.reward_structure = "joint_activation"
         self.world.objects = [
             PuzzleElement(1, MAP_SIZE//4, MAP_SIZE//2, "plate"),
             PuzzleElement(2, MAP_SIZE*3//4, MAP_SIZE//2, "plate")

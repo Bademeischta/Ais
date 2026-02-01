@@ -217,17 +217,23 @@ class EnsembleBot(BaseBot):
         return max(c, key=c.get)
 
 class MetaBot(BaseBot):
+    """Meta-Learner: CRN erkennt Modus, MSPN liefert Policy; Confidence-Threshold für Exploration."""
+    CONFIDENCE_THRESHOLD = 0.8  # Erst ab 80% Sicherheit MSPN nutzen, sonst Exploration
+    CRN_UPDATE_INTERVAL = 20    # Alle 20 Frames CRN neu auswerten
+    MIN_BUFFER_LEN = 50        # Mind. 50 Frames für CRN (Spec: 50–100)
+
     def __init__(self, bot_id, encoder, crn, mspns, mcn):
         super().__init__(bot_id)
         self.algo_name = "Meta-Learner"
         self.encoder = encoder
         self.crn = crn
-        self.mspns = mspns # ModuleList
+        self.mspns = mspns  # ModuleList
         self.mcn = mcn
         self.obs_buffer = deque(maxlen=100)
         self.mode_probs = torch.zeros(10)
         self.active_mode_idx = 0
         self.confidence = 0.0
+        self.uncertainty = 1.0
 
     def decide(self, inputs):
         self.obs_buffer.append(inputs)
@@ -236,14 +242,28 @@ class MetaBot(BaseBot):
 
         with torch.no_grad():
             latent = self.encoder(st)
-
-            if len(self.obs_buffer) >= 20 and len(self.obs_buffer) % 20 == 0:
+            buf_len = len(self.obs_buffer)
+            if buf_len >= self.MIN_BUFFER_LEN and buf_len % self.CRN_UPDATE_INTERVAL == 0:
                 seq = torch.FloatTensor(np.array(list(self.obs_buffer))).unsqueeze(0).to(device)
                 latent_seq = self.encoder(seq)
-                self.mode_probs = self.crn(latent_seq).squeeze()
+                crn_out = self.crn(latent_seq, return_uncertainty=True)
+                if isinstance(crn_out, tuple):
+                    self.mode_probs, unc = crn_out
+                    self.mode_probs = self.mode_probs.squeeze(0)
+                    self.uncertainty = unc.squeeze(0).item() if torch.is_tensor(unc) else unc
+                else:
+                    self.mode_probs = crn_out.squeeze(0)
+                    self.uncertainty = 1.0 - self.mode_probs.max().item()
                 self.active_mode_idx = torch.argmax(self.mode_probs).item()
                 self.confidence = self.mode_probs[self.active_mode_idx].item()
 
+            if self.confidence >= self.CONFIDENCE_THRESHOLD:
+                probs, _ = self.mspns[self.active_mode_idx](latent)
+                dist = torch.distributions.Categorical(probs)
+                return dist.sample().item()
+            # Exploration: gewichtete Mischung aus allen MSPN oder Random
+            if random.random() < 0.3:
+                return random.randint(0, 11)
             probs, _ = self.mspns[self.active_mode_idx](latent)
             dist = torch.distributions.Categorical(probs)
             return dist.sample().item()

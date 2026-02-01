@@ -1,4 +1,4 @@
-# networks.py
+# networks.py – Shared Encoder, CRN (mit Uncertainty), MSPN, MCN
 import torch
 import torch.nn as nn
 import numpy as np
@@ -14,14 +14,29 @@ class SharedEncoder(nn.Module):
         )
     def forward(self, x): return self.net(x)
 
+
 class CRN(nn.Module):
-    def __init__(self, latent_dim=128, hidden_dim=64, num_modes=10):
+    """Context Recognition Network: 50–100 Frames latent -> Modus-Wahrscheinlichkeiten + Uncertainty."""
+    def __init__(self, latent_dim=128, hidden_dim=64, num_modes=10, dropout=0.1):
         super().__init__()
-        self.lstm = nn.LSTM(latent_dim, hidden_dim, batch_first=True)
+        self.num_modes = num_modes
+        self.lstm = nn.LSTM(latent_dim, hidden_dim, batch_first=True, dropout=dropout if dropout else 0)
         self.fc = nn.Linear(hidden_dim, num_modes)
-    def forward(self, x):
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, return_uncertainty=False):
+        # x: (batch, seq_len, latent_dim)
+        self.dropout.train(self.training)
+        x = self.dropout(x)
         out, _ = self.lstm(x)
-        return torch.softmax(self.fc(out[:, -1, :]), dim=-1)
+        logits = self.fc(out[:, -1, :])
+        probs = torch.softmax(logits, dim=-1)
+        if return_uncertainty:
+            entropy = -(probs * (probs + 1e-10).log()).sum(dim=-1)
+            max_entropy = np.log(self.num_modes)
+            uncertainty = entropy / max_entropy  # 0 = sicher, 1 = unsicher
+            return probs, uncertainty
+        return probs
 
 class MSPN(nn.Module):
     def __init__(self, latent_dim=128, action_dim=12):

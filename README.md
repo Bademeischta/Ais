@@ -92,15 +92,34 @@ Das System skaliert automatisch:
 
 ---
 
-## 📊 Visualisierung & Debugging
-- **Attention Rays**: Der Meta-Learner zeigt seine "Aufmerksamkeit" durch farbige Strahlen (Grün=Food, Rot=Feind).
-- **Mode Indicator**: Live-Anzeige der erkannten Spielregeln oben links.
-- **Confidence Bar**: Zeigt an, wie sicher sich die KI über den aktuellen Modus ist.
+## 📊 Visualisierung & UI
+- **Modus-Auswahl**: Dropdown oben rechts – Live-Wechsel des Spielmodus ohne Neustart.
+- **Attention Rays**: Meta-Learner zeigen Strahlen (Grün=Futter, Rot=Feind, Gelb=Spezial).
+- **CRN-Confidence-Bar**: Grüner Balken links – wie sicher der Meta-Learner den Modus erkennt (≥80% aktiviert MSPN).
+- **Active Policy**: Anzeige, welches MSPN gerade aktiv ist (Classic, Tag, CTF, …).
+- **Tutorial-Overlay**: Beim Modus-Wechsel 3 Sekunden Kurzerklärung der Regeln.
+- **Zonen-Darstellung**: King of the Hill und Battle Royale zeigen die Zone (Kreis/Mitte bzw. schrumpfender Radius).
 
 ---
 
 ## ⚙️ Konfiguration
-Alle wichtigen Parameter befinden sich in `entities.py` (MAP_SIZE, STARTING_MASS) und `app.py` (TICK_RATE, FOOD_COUNT).
-Die Netzwerk-Hyperparameter können in `networks.py` angepasst werden.
+- **entities.py**: MAP_SIZE, STARTING_MASS.
+- **app.py**: TICK_RATE, FOOD_COUNT, SAVE_DIR.
+- **networks.py**: CRN (dropout, return_uncertainty), MSPN, MCN.
+- **gamemodes.py**: mode_id, victory_condition, reward_structure, get_render_specs() pro Modus.
+
+---
+
+## 📁 Training & Checkpoints
+- **cell4_training.py**: Curriculum (Phase 1: isoliert, Phase 2: gemischt, Phase 3: Rapid Switch), Checkpoint-Speicherung, CRN-Evaluation-Stub.
+- **Checkpoints**: `saves/shared_encoder_*.pth`, `crn_model_*.pth`, `mcn_model_*.pth`, `mspn_*_*.pth`.
+- **features.py**: Feature-Extraction für Modus-Erkennung (Objekttypen, Farbmuster, Zonen, Interaktionen).
+
+---
+
+## 📖 Weitere Dokumentation
+- **TECH.md**: Architektur, CRN/MSPN/MCN, Feature-Engineering, Reward-Design.
+- **USER_GUIDE.md**: Interface, Modus-Wechsel, Statistiken, eigene Modi.
+- **ANLEITUNG.md**: Kurzüberblick Einstellungen und Ablauf.
 
 Viel Erfolg beim Training deiner adaptiven Agenten! 🚀
