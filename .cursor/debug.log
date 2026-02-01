@@ -10,3 +10,9 @@
 {"location": "app.py:main", "message": "networks_created", "timestamp": 1769966448473, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3", "data": {}}
 {"location": "app.py:main", "message": "bots_initialized", "timestamp": 1769966449481, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {"n_bots": 14}}
 {"location": "app.py:main", "message": "server_starting", "timestamp": 1769966449482, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5", "data": {"host": "127.0.0.1", "port": 5000}}
+{"location": "app.py:entry", "message": "app_started", "timestamp": 1769967352274, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H1", "data": {}}
+{"location": "app.py:imports", "message": "imports_ok", "timestamp": 1769967354374, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H2", "data": {}}
+{"location": "app.py:world", "message": "world_created", "timestamp": 1769967354381, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {}}
+{"location": "app.py:main", "message": "networks_created", "timestamp": 1769967354387, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H3", "data": {}}
+{"location": "app.py:main", "message": "bots_initialized", "timestamp": 1769967355358, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H4", "data": {"n_bots": 14}}
+{"location": "app.py:main", "message": "server_starting", "timestamp": 1769967355359, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "H5", "data": {"host": "127.0.0.1", "port": 5000}}
