@@ -3,33 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Algorithm Arena</title>
+    <title>Ais Meta-Learning Arena</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #111;
-            color: #fff;
-            font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
-        }
-        #gameCanvas {
-            display: block;
-        }
+        body { margin: 0; padding: 0; background-color: #111; color: #fff; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        #gameCanvas { display: block; }
         #status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 5px 10px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid #444;
-            font-size: 12px;
-            z-index: 100;
+            position: absolute; top: 10px; left: 10px;
+            padding: 5px 10px; background: rgba(0, 0, 0, 0.7); border: 1px solid #444; font-size: 12px; z-index: 100;
         }
+        #controls {
+            position: absolute; top: 10px; right: 10px;
+            padding: 8px; background: rgba(0, 0, 0, 0.8); border: 1px solid #444; font-size: 12px; z-index: 100;
+        }
+        #controls select { margin-left: 4px; padding: 2px 6px; background: #222; color: #fff; border: 1px solid #555; }
+        #controls label { margin-right: 8px; }
+        #crnBar {
+            position: absolute; top: 48px; left: 10px;
+            width: 120px; height: 8px; background: rgba(0,0,0,0.7); border: 1px solid #444; z-index: 100;
+        }
+        #crnBarFill { height: 100%; background: linear-gradient(90deg, #0f0, #ff0); transition: width 0.2s; }
+        #tutorialOverlay {
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            padding: 20px 40px; background: rgba(0,0,0,0.9); border: 2px solid #0af;
+            font-size: 18px; text-align: center; z-index: 200; pointer-events: none;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #tutorialOverlay.visible { opacity: 1; }
     </style>
 </head>
 <body>
     <div id="status">CONNECTING...</div>
+    <div id="crnBar" title="Meta-Learner Modus-Confidence"><div id="crnBarFill" style="width:0%"></div></div>
+    <div id="controls">
+        <label>Modus:</label>
+        <select id="modeSelect">
+            <option value="0">Classic Arena</option>
+            <option value="1">Tag</option>
+            <option value="2">Team Deathmatch</option>
+            <option value="3">Capture the Flag</option>
+            <option value="4">King of the Hill</option>
+            <option value="5">Battle Royale</option>
+            <option value="6">Infection</option>
+            <option value="7">Resource Collector</option>
+            <option value="8">Racing</option>
+            <option value="9">Puzzle Cooperation</option>
+        </select>
+    </div>
+    <div id="tutorialOverlay"></div>
     <canvas id="gameCanvas"></canvas>
     
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
@@ -69,16 +89,52 @@
             statusEl.style.color = '#f00';
         });
 
-        socket.on('game_state', (gameState) => {
-            render(gameState);
+        socket.on('game_state', (gameState) => { render(gameState); });
+        socket.on('mode_changed', (data) => {
+            document.getElementById('modeSelect').value = String(data.mode_index ?? 0);
+            showTutorial(data.mode || '');
         });
+
+        document.getElementById('modeSelect').addEventListener('change', function() {
+            const idx = parseInt(this.value, 10);
+            socket.emit('set_mode', { mode_index: idx });
+        });
+
+        const TUTORIALS = {
+            'Classic Arena': 'Masse sammeln, Futter fressen, größere Bots fressen kleinere.',
+            'Tag': 'Ein Bot ist "ES". Berührung tauscht die Rolle.',
+            'Team Deathmatch': 'Rot vs. Blau. Eliminiere Gegner, keine Team-Kills.',
+            'Capture the Flag': 'Flagge des Gegners holen und zur eigenen Basis bringen.',
+            'King of the Hill': 'Halte die zentrale Zone so lange wie möglich.',
+            'Battle Royale': 'Überlebe – die Zone schrumpft, kein Respawn.',
+            'Infection': 'Zombies infizieren bei Berührung. Überlebe oder infiziere alle.',
+            'Resource Collector': 'Sammle Gold/Silber/Bronze für Punkte.',
+            'Racing': 'Checkpoints in Reihenfolge 1→2→3… abfahren.',
+            'Puzzle Cooperation': 'Beide Schalter gleichzeitig aktivieren.'
+        };
+        let tutorialTimeout = null;
+        function showTutorial(modeName) {
+            const el = document.getElementById('tutorialOverlay');
+            el.textContent = TUTORIALS[modeName] || '';
+            el.classList.add('visible');
+            if (tutorialTimeout) clearTimeout(tutorialTimeout);
+            tutorialTimeout = setTimeout(() => { el.classList.remove('visible'); }, 3000);
+        }
 
         function render(gameState) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
             drawGrid();
             drawBoundaries();
-            
+            if (gameState.render_specs && gameState.render_specs.show_zone && gameState.render_specs.zone_radius) {
+                const r = gameState.render_specs;
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)';
+                ctx.lineWidth = 3 * scale;
+                ctx.beginPath();
+                ctx.arc(r.center_x * scale, r.center_y * scale, r.zone_radius * scale, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(255, 200, 0, 0.08)';
+                ctx.fill();
+            }
             if (gameState.food) {
                 gameState.food.forEach(food => {
                     ctx.beginPath();
@@ -152,8 +208,7 @@
             const y = bot.y * scale;
             const r = bot.radius * scale;
             
-            // Draw attention rays
-            if (bot.rays && bot.algo_name === "Meta-Learner") {
+            if (bot.algo_name === "Meta-Learner" && bot.rays) {
                 bot.rays.forEach((ray, i) => {
                     const angle = i * (Math.PI * 2 / 24);
                     const dist = ray[0] * 500 * scale;
@@ -202,10 +257,14 @@
             ctx.fillStyle = '#fff';
             ctx.textAlign = 'left';
             ctx.fillText(`MODE: ${gameState.mode}`, 10, 30);
-
+            const metaBot = gameState.bots && gameState.bots.find(b => b.algo_name === 'Meta-Learner');
+            if (metaBot && typeof metaBot.confidence === 'number') {
+                const pct = Math.round(metaBot.confidence * 100);
+                document.getElementById('crnBarFill').style.width = pct + '%';
+            }
             ctx.font = '14px monospace';
-            ctx.fillText(`Frame: ${gameState.frame}`, 10, 60);
-            ctx.fillText(`Alive: ${gameState.bots ? gameState.bots.length : 0}`, 10, 80);
+            ctx.fillText(`Frame: ${gameState.frame}`, 10, 70);
+            ctx.fillText(`Alive: ${gameState.bots ? gameState.bots.length : 0}`, 10, 90);
             
             if (gameState.bots) {
                 const leaderboard = [...gameState.bots]
@@ -214,6 +273,12 @@
                 
                 ctx.textAlign = 'right';
                 ctx.fillText('=== LEADERBOARD ===', canvas.width - 10, 30);
+                if (metaBot && typeof metaBot.active_mode_idx === 'number') {
+                    const modes = ['Classic','Tag','TDM','CTF','KotH','BR','Inf','Res','Race','Puz'];
+                    ctx.font = '12px monospace';
+                    ctx.fillStyle = '#0af';
+                    ctx.fillText(`Active Policy: ${modes[metaBot.active_mode_idx] || '-'}`, canvas.width - 10, 52);
+                }
                 leaderboard.forEach((bot, i) => {
                     ctx.fillStyle = bot.color;
                     ctx.fillText(`${i+1}. [${bot.algo_name}] ${bot.name}: ${Math.round(bot.mass)}`, 
@@ -236,7 +301,8 @@
                 {name: 'A2C', color: '#8B00FF'},
                 {name: 'Search', color: '#0000FF'},
                 {name: 'Ensemble', color: '#FF69B4'},
-                {name: 'Novel', color: '#FFD700'}
+                {name: 'Novel', color: '#FFD700'},
+                {name: 'Meta-Learner', color: '#0af'}
             ];
             
             ctx.font = '11px monospace';

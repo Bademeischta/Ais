@@ -23,16 +23,20 @@ Das Ziel ist ein System, das echte Generalisierungsfähigkeiten demonstriert. Ag
 - CUDA-fähige GPU (empfohlen: RTX 30er/40er Serie für lokales Training)
 - Node.js (optional für Frontend-Entwicklung)
 
-### Lokale Installation
-1. Repository klonen:
+### Lokale Installation (Windows)
+1. **Python 3.10+** installieren und bei der Installation **„Add Python to PATH“** aktivieren.
+2. Projektordner öffnen (z. B. `C:\Users\...\Desktop\Ais`).
+3. Abhängigkeiten einmalig installieren:
    ```bash
-   git clone https://github.com/your-repo/ais-meta-learning.git
-   cd ais-meta-learning
+   pip install -r requirements.txt
    ```
-2. Abhängigkeiten installieren:
+4. **Starten:** Doppelklick auf `run.bat` oder in der Konsole:
    ```bash
-   pip install flask flask-socketio eventlet numpy torch psutil pyngrok
+   python app.py
    ```
+5. Im Browser **http://localhost:5000** öffnen.
+
+*(Ohne Repository: Einfach den Ordner `Ais` auf deinem PC behalten und `run.bat` ausführen.)*
 
 ---
 
@@ -46,11 +50,7 @@ Das Projekt ist in 4 modulare Zellen unterteilt (ideal für Colab, aber auch lok
 3. **Cell 3 (Backend)**: Initialisiert die Engine und das Meta-Learning System.
 4. **Cell 4 (Execution/Training)**: Startet den Server oder den Trainings-Loop.
 
-**Lokal starten:**
-```bash
-python3 app.py
-```
-Öffne dann `http://localhost:5000` im Browser.
+**Lokal starten (Windows):** `run.bat` doppelklicken oder `python app.py`. Dann im Browser `http://localhost:5000` öffnen.
 
 ### Environment Detection (ENV_CONFIG)
 Das System skaliert automatisch:
@@ -92,15 +92,34 @@ Das System skaliert automatisch:
 
 ---
 
-## 📊 Visualisierung & Debugging
-- **Attention Rays**: Der Meta-Learner zeigt seine "Aufmerksamkeit" durch farbige Strahlen (Grün=Food, Rot=Feind).
-- **Mode Indicator**: Live-Anzeige der erkannten Spielregeln oben links.
-- **Confidence Bar**: Zeigt an, wie sicher sich die KI über den aktuellen Modus ist.
+## 📊 Visualisierung & UI
+- **Modus-Auswahl**: Dropdown oben rechts – Live-Wechsel des Spielmodus ohne Neustart.
+- **Attention Rays**: Meta-Learner zeigen Strahlen (Grün=Futter, Rot=Feind, Gelb=Spezial).
+- **CRN-Confidence-Bar**: Grüner Balken links – wie sicher der Meta-Learner den Modus erkennt (≥80% aktiviert MSPN).
+- **Active Policy**: Anzeige, welches MSPN gerade aktiv ist (Classic, Tag, CTF, …).
+- **Tutorial-Overlay**: Beim Modus-Wechsel 3 Sekunden Kurzerklärung der Regeln.
+- **Zonen-Darstellung**: King of the Hill und Battle Royale zeigen die Zone (Kreis/Mitte bzw. schrumpfender Radius).
 
 ---
 
 ## ⚙️ Konfiguration
-Alle wichtigen Parameter befinden sich in `entities.py` (MAP_SIZE, STARTING_MASS) und `app.py` (TICK_RATE, FOOD_COUNT).
-Die Netzwerk-Hyperparameter können in `networks.py` angepasst werden.
+- **entities.py**: MAP_SIZE, STARTING_MASS.
+- **app.py**: TICK_RATE, FOOD_COUNT, SAVE_DIR.
+- **networks.py**: CRN (dropout, return_uncertainty), MSPN, MCN.
+- **gamemodes.py**: mode_id, victory_condition, reward_structure, get_render_specs() pro Modus.
+
+---
+
+## 📁 Training & Checkpoints
+- **cell4_training.py**: Curriculum (Phase 1: isoliert, Phase 2: gemischt, Phase 3: Rapid Switch), Checkpoint-Speicherung, CRN-Evaluation-Stub.
+- **Checkpoints**: `saves/shared_encoder_*.pth`, `crn_model_*.pth`, `mcn_model_*.pth`, `mspn_*_*.pth`.
+- **features.py**: Feature-Extraction für Modus-Erkennung (Objekttypen, Farbmuster, Zonen, Interaktionen).
+
+---
+
+## 📖 Weitere Dokumentation
+- **TECH.md**: Architektur, CRN/MSPN/MCN, Feature-Engineering, Reward-Design.
+- **USER_GUIDE.md**: Interface, Modus-Wechsel, Statistiken, eigene Modi.
+- **ANLEITUNG.md**: Kurzüberblick Einstellungen und Ablauf.
 
 Viel Erfolg beim Training deiner adaptiven Agenten! 🚀

@@ -1,4 +1,10 @@
 # app.py
+# #region agent log
+import sys, time, json as _dbg_json
+try:
+    _dbg_f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _dbg_f.write(_dbg_json.dumps({"location":"app.py:entry","message":"app_started","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H1","data":{}})+'\n'); _dbg_f.close()
+except Exception: pass
+# #endregion
 import eventlet
 eventlet.monkey_patch()
 
@@ -18,8 +24,16 @@ from mechanics import SpatialGrid
 from networks import SharedEncoder, CRN, MSPN, MCN
 from gamemodes import ClassicArena, TagMode, TeamDeathmatchMode, CaptureTheFlagMode, KingOfTheHillMode, \
                       BattleRoyaleMode, InfectionMode, ResourceCollectorMode, RacingMode, PuzzleCooperationMode
+# Reihenfolge 0..9 für Frontend Modus-Auswahl und CRN
+MODES = [ClassicArena, TagMode, TeamDeathmatchMode, CaptureTheFlagMode, KingOfTheHillMode,
+         BattleRoyaleMode, InfectionMode, ResourceCollectorMode, RacingMode, PuzzleCooperationMode]
 from bots import RandomBot, RuleBasedBot, PotentialFieldBot, PIDControllerBot, GeneticBot, \
                  TabularQLearningBot, DeepQBot, ActorCriticBot, HeuristicSearchBot, EnsembleBot, MetaBot, NovelBot
+# #region agent log
+try:
+    _f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _f.write(_dbg_json.dumps({"location":"app.py:imports","message":"imports_ok","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H2","data":{}})+'\n'); _f.close()
+except Exception: pass
+# #endregion
 
 # --- Configuration ---
 FOOD_COUNT = 150
@@ -116,9 +130,25 @@ class GameWorld:
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 world = GameWorld()
+# #region agent log
+try:
+    _f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _f.write(_dbg_json.dumps({"location":"app.py:world","message":"world_created","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H4","data":{}})+'\n'); _f.close()
+except Exception: pass
+# #endregion
 
 @app.route('/')
 def index(): return render_template('index.html')
+
+
+@socketio.on('set_mode')
+def handle_set_mode(data):
+    """Live-Modus-Wechsel: data = { mode_index: 0..9 }."""
+    idx = data.get('mode_index', 0)
+    if 0 <= idx < len(MODES):
+        with game_state_lock:
+            world.set_mode(MODES[idx])
+        socketio.emit('mode_changed', {'mode': world.current_mode.name, 'mode_index': idx})
+
 
 def game_loop():
     print("Loop started.")
@@ -151,11 +181,16 @@ def game_loop():
                         'metric': b.get_internal_metric(), 'team_id': b.team_id
                     }
                     if hasattr(b, 'ray_results'): d['rays'] = b.ray_results
+                    if hasattr(b, 'confidence'): d['confidence'] = b.confidence
+                    if hasattr(b, 'active_mode_idx'): d['active_mode_idx'] = b.active_mode_idx
                     bot_data.append(d)
 
+                render_specs = world.current_mode.get_render_specs() if world.current_mode else {}
                 socketio.emit('game_state', {
                     'frame': world.frame,
                     'mode': world.current_mode.name if world.current_mode else "None",
+                    'mode_id': getattr(world.current_mode, 'mode_id', 0) if world.current_mode else 0,
+                    'render_specs': render_specs,
                     'bots': bot_data,
                     'food': [{'x': f.x, 'y': f.y} for f in world.food],
                     'objects': [{'type': o.type, 'x': o.x, 'y': o.y, 'radius': o.radius, 'color': o.color, 'activated': getattr(o, 'activated', False)} for o in world.objects]
@@ -174,6 +209,11 @@ if __name__ == '__main__':
     crn = CRN().to(device)
     mspns = torch.nn.ModuleList([MSPN().to(device) for _ in range(10)])
     mcn = MCN().to(device)
+    # #region agent log
+    try:
+        _f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _f.write(_dbg_json.dumps({"location":"app.py:main","message":"networks_created","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H3","data":{}})+'\n'); _f.close()
+    except Exception: pass
+    # #endregion
 
     # Load weights if available...
 
@@ -187,7 +227,22 @@ if __name__ == '__main__':
 
     for i in range(3):
         world.bots.append(MetaBot(len(world.bots), encoder, crn, mspns, mcn))
+    # #region agent log
+    try:
+        _f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _f.write(_dbg_json.dumps({"location":"app.py:main","message":"bots_initialized","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H4","data":{"n_bots":len(world.bots)}})+'\n'); _f.close()
+    except Exception: pass
+    # #endregion
 
     world.set_mode(ClassicArena)
     socketio.start_background_task(game_loop)
-    socketio.run(app, host='0.0.0.0', port=5000)
+    # #region agent log
+    try:
+        _f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _f.write(_dbg_json.dumps({"location":"app.py:main","message":"server_starting","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H5","data":{"host":"127.0.0.1","port":5000}})+'\n'); _f.close()
+    except Exception: pass
+    # #endregion
+    print("\n" + "=" * 50)
+    print("  Ais Arena läuft lokal.")
+    print("  Im Browser öffnen: http://localhost:5000")
+    print("  Beenden: Strg+C")
+    print("=" * 50 + "\n")
+    socketio.run(app, host='127.0.0.1', port=5000)
