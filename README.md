@@ -111,9 +111,21 @@ Das System skaliert automatisch:
 ---
 
 ## 📁 Training & Checkpoints
-- **cell4_training.py**: Curriculum (Phase 1: isoliert, Phase 2: gemischt, Phase 3: Rapid Switch), Checkpoint-Speicherung, CRN-Evaluation-Stub.
-- **Checkpoints**: `saves/shared_encoder_*.pth`, `crn_model_*.pth`, `mcn_model_*.pth`, `mspn_*_*.pth`.
+- **cell4_training.py**: Echtes Training: Phase 0 (Data Collection), Phase 1 (CRN supervised), Phase 2 (MSPN/PPO pro Modus), Phase 3 (MCN Meta-Episoden). Checkpoint-Speicherung, CRN-Evaluation.
+- **Checkpoints**: `saves/shared_encoder_*.pth`, `feature_encoder_*.pth`, `crn_model_*.pth`, `mcn_model_*.pth`, `mspn_*_*.pth`.
 - **features.py**: Feature-Extraction für Modus-Erkennung (Objekttypen, Farbmuster, Zonen, Interaktionen).
+
+### Vollständiges Training ausführen
+```bash
+python train_full_pipeline.py
+```
+Führt Ende-zu-Ende aus: CRN-Datensammlung → CRN supervised Training → MSPN-Training (PPO) pro Modus → MCN Meta-Training → Evaluation (CRN-Genauigkeit, Transfer-Qualität) und speichert Plots/Report unter `logs/`.
+
+### Tests ausführen
+```bash
+python tests.py
+```
+Mindestens 16 Unit-Tests für Spielmodi, Netze, Bots und Training.
 
 ---
 

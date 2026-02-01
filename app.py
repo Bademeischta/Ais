@@ -28,7 +28,8 @@ from gamemodes import ClassicArena, TagMode, TeamDeathmatchMode, CaptureTheFlagM
 MODES = [ClassicArena, TagMode, TeamDeathmatchMode, CaptureTheFlagMode, KingOfTheHillMode,
          BattleRoyaleMode, InfectionMode, ResourceCollectorMode, RacingMode, PuzzleCooperationMode]
 from bots import RandomBot, RuleBasedBot, PotentialFieldBot, PIDControllerBot, GeneticBot, \
-                 TabularQLearningBot, DeepQBot, ActorCriticBot, HeuristicSearchBot, EnsembleBot, MetaBot, NovelBot
+                 TabularQLearningBot, DeepQBot, ActorCriticBot, HeuristicSearchBot, EnsembleBot, MetaBot, NovelBot, \
+                 PPOBot, DuelingDQNBot, SACBot, CuriosityBot, LSTMBot
 # #region agent log
 try:
     _f = open(r'c:\Users\Administrator\Desktop\Ais\.cursor\debug.log', 'a'); _f.write(_dbg_json.dumps({"location":"app.py:imports","message":"imports_ok","timestamp":int(time.time()*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H2","data":{}})+'\n'); _f.close()
@@ -47,8 +48,9 @@ SAVE_DIR = './saves/'
 AUTO_MODE_ROTATION = True
 MODE_SWITCH_INTERVAL_FRAMES = 3000   # alle 3000 Frames (~100 Sek bei 30 FPS) nächster Modus
 
-# Shared Lock
+# Shared Lock & Pause
 game_state_lock = threading.Lock()
+game_paused = False
 
 def safe_decide(bot, inputs):
     try:
@@ -180,10 +182,21 @@ def handle_set_mode(data):
         socketio.emit('mode_changed', {'mode': world.current_mode.name, 'mode_index': idx})
 
 
+@socketio.on('toggle_pause')
+def handle_toggle_pause(data):
+    """Pause/Resume: data = { paused: bool }."""
+    global game_paused
+    game_paused = data.get('paused', False)
+
+
 def game_loop():
     print("Loop started.")
+    global game_paused
     while True:
         st = time.time()
+        if game_paused:
+            time.sleep(max(0, 1/30 - (time.time() - st)))
+            continue
         with game_state_lock:
             for b in world.bots:
                 if b.died: continue
@@ -262,10 +275,12 @@ if __name__ == '__main__':
 
     # Load weights if available...
 
-    bt = [RandomBot, RuleBasedBot, PotentialFieldBot, PIDControllerBot, GeneticBot, TabularQLearningBot, DeepQBot, ActorCriticBot, HeuristicSearchBot, EnsembleBot, NovelBot]
-
+    bt = [RandomBot, RuleBasedBot, PotentialFieldBot, PIDControllerBot, GeneticBot, TabularQLearningBot,
+          DeepQBot, ActorCriticBot, HeuristicSearchBot, EnsembleBot, NovelBot,
+          PPOBot, DuelingDQNBot, SACBot, CuriosityBot, LSTMBot]
+    dl_bots = [DeepQBot, ActorCriticBot, NovelBot, PPOBot, DuelingDQNBot, SACBot, CuriosityBot, LSTMBot]
     for i, c in enumerate(bt):
-        if c in [DeepQBot, ActorCriticBot, NovelBot]:
+        if c in dl_bots:
             world.bots.append(c(len(world.bots), device=device))
         else:
             world.bots.append(c(len(world.bots)))

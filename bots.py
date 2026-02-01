@@ -3,6 +3,7 @@ import random
 import math
 import numpy as np
 import torch
+import torch.nn as nn
 from collections import deque
 from entities import BaseBot, MAP_SIZE
 from networks import DQNet, ACNet, SynergyNet, DuelingDQNet
@@ -215,6 +216,383 @@ class EnsembleBot(BaseBot):
         c = {};
         for v in [v1, v2, v3]: c[v] = c.get(v, 0) + 1
         return max(c, key=c.get)
+
+
+class CuriosityNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.forward_model = nn.Sequential(
+            nn.Linear(228 + 12, 128), nn.ReLU(),
+            nn.Linear(128, 228)
+        )
+        self.inverse_model = nn.Sequential(
+            nn.Linear(228 + 228, 128), nn.ReLU(),
+            nn.Linear(128, 12)
+        )
+
+    def forward(self, state, action_oh, next_state):
+        pred_next = self.forward_model(torch.cat([state, action_oh], dim=-1))
+        pred_action = self.inverse_model(torch.cat([state, next_state], dim=-1))
+        return pred_next, pred_action
+
+
+class LSTMPolicyNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lstm = nn.LSTM(228, 128, batch_first=True)
+        self.actor = nn.Sequential(nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 12), nn.Softmax(dim=-1))
+        self.critic = nn.Sequential(nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 1))
+
+    def forward(self, x, hidden=None):
+        if len(x.shape) == 2:
+            x = x.unsqueeze(1)
+        lstm_out, hidden = self.lstm(x, hidden)
+        last_out = lstm_out[:, -1, :]
+        return self.actor(last_out), self.critic(last_out), hidden
+
+
+class PPOBot(BaseBot):
+    def __init__(self, bot_id, device=torch.device("cpu")):
+        super().__init__(bot_id)
+        self.algo_name = "PPO"
+        self.color = "#FF1493"
+        self.device = device
+        self.policy = ACNet().to(device)
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
+        self.buffer = []
+        self.batch_size = 64
+        self.ppo_epochs = 4
+        self.clip_epsilon = 0.2
+
+    def decide(self, inputs):
+        with torch.no_grad():
+            probs, value = self.policy(torch.FloatTensor(inputs).to(self.device))
+            dist = torch.distributions.Categorical(probs)
+            action = dist.sample()
+            self.current_state = inputs
+            self.current_action = action.item()
+            self.current_log_prob = dist.log_prob(action).item()
+            self.current_value = value.item()
+            return self.current_action
+
+    def learn(self, reward, next_inputs, done):
+        if not hasattr(self, "current_state"):
+            return
+        self.buffer.append((
+            self.current_state,
+            self.current_action,
+            reward,
+            self.current_log_prob,
+            self.current_value,
+            done,
+        ))
+        if len(self.buffer) >= self.batch_size:
+            self._ppo_update()
+            self.buffer = []
+
+    def _ppo_update(self):
+        states, actions, rewards, old_log_probs, old_values, dones = zip(*self.buffer)
+        returns = []
+        G = 0
+        for r, d in zip(reversed(rewards), reversed(dones)):
+            if d:
+                G = 0
+            G = r + 0.99 * G
+            returns.insert(0, G)
+        states = torch.FloatTensor(np.array(states)).to(self.device)
+        actions = torch.LongTensor(actions).to(self.device)
+        returns = torch.FloatTensor(returns).to(self.device)
+        old_log_probs = torch.FloatTensor(old_log_probs).to(self.device)
+        old_values = torch.FloatTensor(old_values).to(self.device)
+        advantages = returns - old_values
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        for _ in range(self.ppo_epochs):
+            probs, values = self.policy(states)
+            dist = torch.distributions.Categorical(probs)
+            new_log_probs = dist.log_prob(actions)
+            ratio = torch.exp(new_log_probs - old_log_probs)
+            surr1 = ratio * advantages
+            surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantages
+            actor_loss = -torch.min(surr1, surr2).mean()
+            critic_loss = nn.MSELoss()(values.squeeze(), returns)
+            entropy = dist.entropy().mean()
+            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 0.5)
+            self.optimizer.step()
+
+    def get_internal_metric(self):
+        return f"Buf: {len(self.buffer)}"
+
+    def save_state(self):
+        return {"policy": self.policy.state_dict()}
+
+    def load_state(self, state):
+        self.policy.load_state_dict(state["policy"])
+
+
+class DuelingDQNBot(BaseBot):
+    def __init__(self, bot_id, device=torch.device("cpu")):
+        super().__init__(bot_id)
+        self.algo_name = "D-DQN"
+        self.color = "#9400D3"
+        self.device = device
+        self.model = DuelingDQNet().to(device)
+        self.target = DuelingDQNet().to(device)
+        self.target.load_state_dict(self.model.state_dict())
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.0003)
+        self.memory = deque(maxlen=100000)
+        self.epsilon = 1.0
+        self.steps = 0
+        self.ls, self.la = None, None
+
+    def decide(self, inputs):
+        self.steps += 1
+        self.ls = inputs
+        if random.random() < self.epsilon:
+            self.la = random.randint(0, 11)
+        else:
+            with torch.no_grad():
+                q_values = self.model(torch.FloatTensor(inputs).to(self.device))
+                self.la = torch.argmax(q_values).item()
+        return self.la
+
+    def learn(self, reward, next_inputs, done):
+        if self.ls is None:
+            return
+        self.memory.append((self.ls, self.la, reward, next_inputs, done))
+        if len(self.memory) > 256 and self.steps % 4 == 0:
+            batch = random.sample(self.memory, 256)
+            s, a, r, ns, d = zip(*batch)
+            s = torch.FloatTensor(np.array(s)).to(self.device)
+            a = torch.LongTensor(a).to(self.device)
+            r = torch.FloatTensor(r).to(self.device)
+            ns = torch.FloatTensor(np.array(ns)).to(self.device)
+            d = torch.BoolTensor(d).to(self.device)
+            current_q = self.model(s).gather(1, a.unsqueeze(1)).squeeze()
+            next_actions = self.model(ns).argmax(1)
+            next_q = self.target(ns).gather(1, next_actions.unsqueeze(1)).squeeze()
+            next_q[d] = 0
+            target_q = r + 0.99 * next_q
+            loss = nn.MSELoss()(current_q, target_q.detach())
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            self.epsilon = max(0.01, self.epsilon * 0.9995)
+            if self.steps % 1000 == 0:
+                self.target.load_state_dict(self.model.state_dict())
+
+    def get_internal_metric(self):
+        return f"ε: {self.epsilon:.2f}"
+
+    def save_state(self):
+        return {"model": self.model.state_dict(), "eps": self.epsilon}
+
+    def load_state(self, state):
+        self.model.load_state_dict(state["model"])
+        self.epsilon = state["eps"]
+
+
+class SACBot(BaseBot):
+    def __init__(self, bot_id, device=torch.device("cpu")):
+        super().__init__(bot_id)
+        self.algo_name = "SAC"
+        self.color = "#20B2AA"
+        self.device = device
+        self.actor = ACNet().to(device)
+        self.critic1 = nn.Sequential(
+            nn.Linear(228, 256), nn.ReLU(),
+            nn.Linear(256, 12)
+        ).to(device)
+        self.critic2 = nn.Sequential(
+            nn.Linear(228, 256), nn.ReLU(),
+            nn.Linear(256, 12)
+        ).to(device)
+        self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_opt = torch.optim.Adam(
+            list(self.critic1.parameters()) + list(self.critic2.parameters()), lr=3e-4
+        )
+        self.alpha = 0.2
+        self.memory = deque(maxlen=50000)
+        self.ls, self.la = None, None
+
+    def decide(self, inputs):
+        self.ls = inputs
+        with torch.no_grad():
+            probs, _ = self.actor(torch.FloatTensor(inputs).to(self.device))
+            dist = torch.distributions.Categorical(probs)
+            self.la = dist.sample().item()
+        return self.la
+
+    def learn(self, reward, next_inputs, done):
+        if self.ls is None:
+            return
+        self.memory.append((self.ls, self.la, reward, next_inputs, done))
+        if len(self.memory) > 128:
+            batch = random.sample(self.memory, 128)
+            s, a, r, ns, d = zip(*batch)
+            s = torch.FloatTensor(np.array(s)).to(self.device)
+            a = torch.LongTensor(a).to(self.device)
+            r = torch.FloatTensor(r).to(self.device)
+            ns = torch.FloatTensor(np.array(ns)).to(self.device)
+            d = torch.BoolTensor(d).to(self.device)
+            with torch.no_grad():
+                next_probs, _ = self.actor(ns)
+                next_q1 = self.critic1(ns)
+                next_q2 = self.critic2(ns)
+                next_q = torch.min(next_q1, next_q2)
+                next_v = (next_probs * (next_q - self.alpha * torch.log(next_probs + 1e-8))).sum(dim=1)
+                next_v[d] = 0
+                target_q = r + 0.99 * next_v
+            current_q1 = self.critic1(s).gather(1, a.unsqueeze(1)).squeeze()
+            current_q2 = self.critic2(s).gather(1, a.unsqueeze(1)).squeeze()
+            critic_loss = nn.MSELoss()(current_q1, target_q) + nn.MSELoss()(current_q2, target_q)
+            self.critic_opt.zero_grad()
+            critic_loss.backward()
+            self.critic_opt.step()
+            probs, _ = self.actor(s)
+            q1 = self.critic1(s)
+            q2 = self.critic2(s)
+            q = torch.min(q1, q2)
+            actor_loss = (probs * (self.alpha * torch.log(probs + 1e-8) - q)).sum(dim=1).mean()
+            self.actor_opt.zero_grad()
+            actor_loss.backward()
+            self.actor_opt.step()
+
+    def get_internal_metric(self):
+        return f"α: {self.alpha:.2f}"
+
+    def save_state(self):
+        return {"actor": self.actor.state_dict(), "c1": self.critic1.state_dict(), "c2": self.critic2.state_dict()}
+
+    def load_state(self, state):
+        self.actor.load_state_dict(state["actor"])
+        self.critic1.load_state_dict(state["c1"])
+        self.critic2.load_state_dict(state["c2"])
+
+
+class CuriosityBot(BaseBot):
+    def __init__(self, bot_id, device=torch.device("cpu")):
+        super().__init__(bot_id)
+        self.algo_name = "Curiosity"
+        self.color = "#FFB6C1"
+        self.device = device
+        self.policy = ACNet().to(device)
+        self.curiosity = CuriosityNet().to(device)
+        self.policy_opt = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
+        self.curiosity_opt = torch.optim.Adam(self.curiosity.parameters(), lr=3e-4)
+        self.memory = deque(maxlen=10000)
+        self.ls, self.la = None, None
+
+    def decide(self, inputs):
+        self.ls = inputs
+        with torch.no_grad():
+            probs, _ = self.policy(torch.FloatTensor(inputs).to(self.device))
+            dist = torch.distributions.Categorical(probs)
+            self.la = dist.sample().item()
+        return self.la
+
+    def learn(self, reward, next_inputs, done):
+        if self.ls is None:
+            return
+        self.memory.append((self.ls, self.la, reward, next_inputs, done))
+        if len(self.memory) > 64:
+            batch = random.sample(self.memory, 64)
+            s, a, r, ns, d = zip(*batch)
+            s_t = torch.FloatTensor(np.array(s)).to(self.device)
+            a_t = torch.LongTensor(a).to(self.device)
+            r_t = torch.FloatTensor(r).to(self.device)
+            ns_t = torch.FloatTensor(np.array(ns)).to(self.device)
+            a_oh = torch.zeros(len(a), 12, device=self.device)
+            a_oh.scatter_(1, a_t.unsqueeze(1), 1)
+            pred_next, pred_action = self.curiosity(s_t, a_oh, ns_t)
+            forward_loss = nn.MSELoss()(pred_next, ns_t)
+            intrinsic_scalar = forward_loss.detach()
+            inverse_loss = nn.CrossEntropyLoss()(pred_action, a_t)
+            curiosity_loss = forward_loss + inverse_loss
+            self.curiosity_opt.zero_grad()
+            curiosity_loss.backward()
+            self.curiosity_opt.step()
+            total_reward = r_t + 0.5 * intrinsic_scalar
+            probs, values = self.policy(s_t)
+            dist = torch.distributions.Categorical(probs)
+            log_probs = dist.log_prob(a_t)
+            policy_loss = -(log_probs * total_reward).mean()
+            self.policy_opt.zero_grad()
+            policy_loss.backward()
+            self.policy_opt.step()
+
+    def get_internal_metric(self):
+        return f"Mem: {len(self.memory)}"
+
+    def save_state(self):
+        return {"policy": self.policy.state_dict(), "curiosity": self.curiosity.state_dict()}
+
+    def load_state(self, state):
+        self.policy.load_state_dict(state["policy"])
+        self.curiosity.load_state_dict(state["curiosity"])
+
+
+class LSTMBot(BaseBot):
+    def __init__(self, bot_id, device=torch.device("cpu")):
+        super().__init__(bot_id)
+        self.algo_name = "LSTM"
+        self.color = "#4169E1"
+        self.device = device
+        self.policy = LSTMPolicyNet().to(device)
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
+        self.hidden = None
+        self.memory = deque(maxlen=20000)
+        self.sequence_buffer = deque(maxlen=20)
+        self.ls, self.la = None, None
+
+    def decide(self, inputs):
+        self.ls = inputs
+        self.sequence_buffer.append(inputs)
+        with torch.no_grad():
+            seq = torch.FloatTensor(np.array(list(self.sequence_buffer))).unsqueeze(0).to(self.device)
+            probs, _, self.hidden = self.policy(seq, self.hidden)
+            dist = torch.distributions.Categorical(probs)
+            self.la = dist.sample().item()
+        return self.la
+
+    def learn(self, reward, next_inputs, done):
+        if self.ls is None:
+            return
+        self.memory.append((list(self.sequence_buffer), self.la, reward, done))
+        if done:
+            self.hidden = None
+        if len(self.memory) > 128:
+            batch = random.sample(self.memory, 32)
+            total_loss = 0
+            losses = []
+            for seq, a, r, d in batch:
+                seq_t = torch.FloatTensor(np.array(seq)).unsqueeze(0).to(self.device)
+                probs, value, _ = self.policy(seq_t)
+                dist = torch.distributions.Categorical(probs)
+                log_prob = dist.log_prob(torch.LongTensor([a]).to(self.device))
+                advantage = r - value.item()
+                actor_loss = -log_prob * advantage
+                critic_loss = (advantage ** 2)
+                loss = actor_loss + 0.5 * critic_loss
+                losses.append(loss)
+            if losses:
+                avg_loss = torch.stack(losses).mean()
+                self.optimizer.zero_grad()
+                avg_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1.0)
+                self.optimizer.step()
+
+    def get_internal_metric(self):
+        return f"Seq: {len(self.sequence_buffer)}"
+
+    def save_state(self):
+        return {"policy": self.policy.state_dict()}
+
+    def load_state(self, state):
+        self.policy.load_state_dict(state["policy"])
+
 
 class MetaBot(BaseBot):
     """Meta-Learner: CRN erkennt Modus, MSPN liefert Policy; Confidence-Threshold für Exploration."""
