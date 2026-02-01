@@ -23,16 +23,20 @@ Das Ziel ist ein System, das echte Generalisierungsfähigkeiten demonstriert. Ag
 - CUDA-fähige GPU (empfohlen: RTX 30er/40er Serie für lokales Training)
 - Node.js (optional für Frontend-Entwicklung)
 
-### Lokale Installation
-1. Repository klonen:
+### Lokale Installation (Windows)
+1. **Python 3.10+** installieren und bei der Installation **„Add Python to PATH“** aktivieren.
+2. Projektordner öffnen (z. B. `C:\Users\...\Desktop\Ais`).
+3. Abhängigkeiten einmalig installieren:
    ```bash
-   git clone https://github.com/your-repo/ais-meta-learning.git
-   cd ais-meta-learning
+   pip install -r requirements.txt
    ```
-2. Abhängigkeiten installieren:
+4. **Starten:** Doppelklick auf `run.bat` oder in der Konsole:
    ```bash
-   pip install flask flask-socketio eventlet numpy torch psutil pyngrok
+   python app.py
    ```
+5. Im Browser **http://localhost:5000** öffnen.
+
+*(Ohne Repository: Einfach den Ordner `Ais` auf deinem PC behalten und `run.bat` ausführen.)*
 
 ---
 
@@ -46,11 +50,7 @@ Das Projekt ist in 4 modulare Zellen unterteilt (ideal für Colab, aber auch lok
 3. **Cell 3 (Backend)**: Initialisiert die Engine und das Meta-Learning System.
 4. **Cell 4 (Execution/Training)**: Startet den Server oder den Trainings-Loop.
 
-**Lokal starten:**
-```bash
-python3 app.py
-```
-Öffne dann `http://localhost:5000` im Browser.
+**Lokal starten (Windows):** `run.bat` doppelklicken oder `python app.py`. Dann im Browser `http://localhost:5000` öffnen.
 
 ### Environment Detection (ENV_CONFIG)
 Das System skaliert automatisch:

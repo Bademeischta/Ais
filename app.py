@@ -190,4 +190,9 @@ if __name__ == '__main__':
 
     world.set_mode(ClassicArena)
     socketio.start_background_task(game_loop)
-    socketio.run(app, host='0.0.0.0', port=5000)
+    print("\n" + "=" * 50)
+    print("  Ais Arena läuft lokal.")
+    print("  Im Browser öffnen: http://localhost:5000")
+    print("  Beenden: Strg+C")
+    print("=" * 50 + "\n")
+    socketio.run(app, host='127.0.0.1', port=5000)
